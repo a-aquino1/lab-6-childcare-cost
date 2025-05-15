@@ -3,7 +3,7 @@ title: "Lab 6: Childcare Cost in California"
 author: "Aida Aquino Arias"
 format: html
 execute: 
-  echo: true
+  echo: false
 ---
 ## The Data
 
@@ -16,6 +16,8 @@ The data come to us from [TidyTuesday](https://github.com/rfordatascience/tidytu
 
 ```{r}
 #| label: setup
+#| echo: false
+library(tidyverse)
 
 ```
 
@@ -28,6 +30,7 @@ counties <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytues
 ```
 
 **1. Briefly describe the dataset (~ 4 sentences). What information does it contain?**
+> The dataset contains the childcare price by childcare provider type, age of childre, and county. The years presented in the data are from 2008 to 2018. Although not ideal the data implies that "both parents" refer to one male and one female limiting some factors.
 
 ## California Childcare Costs
 
@@ -39,6 +42,14 @@ Let's start by focusing only on California.
 
 ```{r}
 #| label: ca-childcare-costs
+ca_childcare <- childcare_costs |>
+  left_join(counties, by =  "county_fips_code") |>
+  filter(state_name == "California") |>
+  select(county_name, study_year, mhi_2018, mcsa, c(mc_infant:mc_preschool)) 
+
+print(ca_childcare)
+
+#searched for the data in github to find the appropriate values. Joined the two data sets to get the appropriate variables into one set. Then sectioned out the needed variables.
 
 ```
 
@@ -51,10 +62,21 @@ Let's start by focusing only on California.
 
 ca_childcare <- ca_childcare |> 
   mutate(county_name = str_remove(county_name, " County")) |> 
-  mutate(region = fct_______(county_name,
-    'Superior California' = c("Butte", "Colusa", "El Dorado". ...),
-     ...
+  mutate(region = fct_collapse(county_name,
+    'Superior California' = c("Butte", "Colusa", "El Dorado", "Glenn", "Lassen", "Modoc", "Nevada", "Placer", "Plumas", "Sacramento", "Shasta", "Sierra", "Siskiyou", "Sutter", "Tehama", "Yolo", "Yuba"), 
+    'North Coast' = c("Del Norte", "Humboldt", "Lake", "Mendocino", "Napa", "Sonoma", "Trinity"),
+    'San Francisco Bay Area' = c("Alameda", "Contra Costa", "Marin", "San Francisco", "San Mateo", "Santa Clara", "Solano"),
+    'Northern San Joaquin Valley' = c("Alpine", "Amador", "Calaveras", "Madera", "Mariposa", "Merced", "Mono", "San Joaquin","Stanislaus", "Tuolumne"),
+    'Central Coast' = c("Monterey", "San Benito", "San Luis Obispo", "Santa Barbara", "Santa Cruz", "Ventura"),
+    'Southern San Joaquin Valley' = c("Fresno", "Inyo", "Kern", "Kings", "Tulare"),
+    'Inland Empire' = c("Riverside", "San Bernardino"),
+    'Los Angeles County' = c("Los Angeles"),
+    'Orange County' = c("Orange"),
+    'San Diego - Imperial' = c("Imperial", "San Diego")
+     
     ))
+
+#searched which function to use and then manually inputted the counties into their respective regions as stated by the census.
 ```
 
 
@@ -64,7 +86,15 @@ ca_childcare <- ca_childcare |>
 #| label: median-income-by-region-over-time
 # Hint: You will want to calculate the median of median income before you make columns for 2008/2018 by transforming the data
 
+median_income <- ca_childcare |>
+  group_by(region, study_year) |>
+  summarize(median_income = median(mhi_2018)) |>
+  filter(study_year %in% c(2008,2018)) |>
+  pivot_wider(names_from = study_year, values_from = median_income)
 
+print(median_income)
+
+#used the R book to see which function fit best to use and make more columns
 ```
 
 
@@ -73,8 +103,15 @@ ca_childcare <- ca_childcare |>
 *Hint: The code should give me the EXACT answer. This means having the code output the exact row(s) and variable(s) necessary for providing the solution. Consider the `slice()` functions.*
 
 ```{r}
-#| label: lowest-median-weekly-price-2018
+#| label: lowest-median-weekly-price-201
 
+lowest_median <- ca_childcare |>
+  filter(study_year == 2018) |>
+  group_by(region) |>
+  summarize(infant_care = median(mc_infant)) |>
+  slice_min(infant_care, n = 1)
+  
+print(lowest_median)
 
 ```
 
@@ -83,7 +120,35 @@ ca_childcare <- ca_childcare |>
 
 ```{r}
 #| label: recreate-plot
+plot <- ca_childcare |>
+  select(study_year, region, mc_infant, mc_toddler, mc_preschool) |>
+pivot_longer(cols = c(mc_infant, mc_toddler, mc_preschool), 
+             names_to = "age_group",
+             values_to = "weekly_median") |>
+  mutate(age_group = fct_recode(age_group, 
+                                "Infant" = "mc_infant",
+                                "Toddler" = "mc_toddler",
+                                "Preschool" = "mc_preschool")) |>
+  mutate(region = factor(region, levels = c("San Francisco Bay Area", "Orange County", "Los Angeles County", "Northern San Joaquin Valley", "Central Coast", "Inland Empire", "Superior California", "Southern San Joaquin Valley", "San Diego - Imperial", "North Coast")))
+  
+  
+  
 
+ggplot(plot, aes(x = study_year, y = weekly_median, color = region), show.legend = TRUE, width = 1) +
+  geom_point(method = "loess", 
+               span = 0.5,
+               se = FALSE) +
+  geom_smooth() +
+  facet_wrap(~age_group, nrow = 1) +
+  labs(title = "Weekly Median Price for Center-Based Childcare ($)",
+       x = "Study Year",
+       y = NULL,
+       color = "California Region") +
+  scale_x_continuous(breaks = seq(2008,2018, by = 2)) +
+  scale_y_continuous(limits = c(100,500), breaks = seq(100,500, by = 100)) +
+  theme_bw() +
+  theme(aspect.ratio = 1)
+#used the book to find the formats such as scale_x and scale_y and how to change the size of the charts.
 ```
 
 
